@@ -75,6 +75,8 @@ class ActivationsStore:
             hook_layer=cfg.hook_layer,
             hook_head_index=cfg.hook_head_index,
             context_size=cfg.context_size,
+            start_pos_offset=cfg.start_pos_offset,
+            end_pos_offset=cfg.end_pos_offset,
             d_in=cfg.d_in,
             n_batches_in_buffer=cfg.n_batches_in_buffer,
             total_training_tokens=cfg.training_tokens,
@@ -96,6 +98,8 @@ class ActivationsStore:
         model: HookedRootModule,
         sae: SAE,
         context_size: int | None = None,
+        start_pos_offset: int = 0,
+        end_pos_offset: int = 0,
         dataset: HfDataset | str | None = None,
         streaming: bool = True,
         store_batch_size_prompts: int = 8,
@@ -113,6 +117,8 @@ class ActivationsStore:
             hook_layer=sae.cfg.hook_layer,
             hook_head_index=sae.cfg.hook_head_index,
             context_size=sae.cfg.context_size if context_size is None else context_size,
+            start_pos_offset=start_pos_offset,
+            end_pos_offset=end_pos_offset,
             prepend_bos=sae.cfg.prepend_bos,
             streaming=streaming,
             store_batch_size_prompts=store_batch_size_prompts,
@@ -134,6 +140,8 @@ class ActivationsStore:
         hook_layer: int,
         hook_head_index: int | None,
         context_size: int,
+        start_pos_offset: int,
+        end_pos_offset: int,
         d_in: int,
         n_batches_in_buffer: int,
         total_training_tokens: int,
@@ -176,6 +184,8 @@ class ActivationsStore:
         self.hook_layer = hook_layer
         self.hook_head_index = hook_head_index
         self.context_size = context_size
+        self.start_pos_offset = start_pos_offset
+        self.end_pos_offset = end_pos_offset
         self.d_in = d_in
         self.n_batches_in_buffer = n_batches_in_buffer
         self.half_buffer_size = n_batches_in_buffer // 2
@@ -451,11 +461,15 @@ class ActivationsStore:
 
         n_batches, n_context = batch_tokens.shape
 
-        stacked_activations = torch.zeros((n_batches, n_context, 1, self.d_in))
+        # For some models, we might want to exclude some positions from the sequence to train on
+        context_window = list(range(self.start_pos_offset, n_context-self.end_pos_offset))
+        effective_context_size = len(context_window)
+
+        stacked_activations = torch.zeros((n_batches, effective_context_size, 1, self.d_in))
 
         if self.hook_head_index is not None:
             stacked_activations[:, :, 0] = layerwise_activations[self.hook_name][
-                :, :, self.hook_head_index
+                :, context_window, self.hook_head_index
             ]
         elif (
             layerwise_activations[self.hook_name].ndim > 3
@@ -463,15 +477,15 @@ class ActivationsStore:
             try:
                 stacked_activations[:, :, 0] = layerwise_activations[
                     self.hook_name
-                ].view(n_batches, n_context, -1)
+                ].view(n_batches, effective_context_size, -1)[:, context_window, :]
             except RuntimeError as e:
                 print(f"Error during view operation: {e}")
                 print("Attempting to use reshape instead...")
                 stacked_activations[:, :, 0] = layerwise_activations[
                     self.hook_name
-                ].reshape(n_batches, n_context, -1)
+                ].reshape(n_batches, effective_context_size, -1)[:, context_window, :]
         else:
-            stacked_activations[:, :, 0] = layerwise_activations[self.hook_name]
+            stacked_activations[:, :, 0] = layerwise_activations[self.hook_name][:, context_window, :]
 
         return stacked_activations
 
@@ -491,10 +505,13 @@ class ActivationsStore:
         d_in = self.d_in
         total_size = batch_size * n_batches_in_buffer
         num_layers = 1
+        # Calculate the effective context size
+        context_window = list(range(self.start_pos_offset, context_size-self.end_pos_offset))
+        effective_context_size = len(context_window)
 
         if self.cached_activations_path is not None:
             # Load the activations from disk
-            buffer_size = total_size * context_size
+            buffer_size = total_size * effective_context_size
             # Initialize an empty tensor with an additional dimension for layers
             new_buffer = torch.zeros(
                 (buffer_size, num_layers, d_in),
@@ -548,7 +565,7 @@ class ActivationsStore:
         refill_iterator = range(0, batch_size * n_batches_in_buffer, batch_size)
         # Initialize empty tensor buffer of the maximum required size with an additional dimension for layers
         new_buffer = torch.zeros(
-            (total_size, context_size, num_layers, d_in),
+            (total_size, effective_context_size, num_layers, d_in),
             dtype=self.dtype,  # type: ignore
             device=self.device,
         )
