@@ -62,6 +62,8 @@ class SAEConfig:
     activation_fn_kwargs: dict[str, Any] = field(default_factory=dict)
     neuronpedia_id: Optional[str] = None
     model_from_pretrained_kwargs: dict[str, Any] = field(default_factory=dict)
+    start_pos_offset: int = 0
+    end_pos_offset: int = 0
 
     @classmethod
     def from_dict(cls, config_dict: dict[str, Any]) -> "SAEConfig":
@@ -108,6 +110,8 @@ class SAEConfig:
             "normalize_activations": self.normalize_activations,
             "neuronpedia_id": self.neuronpedia_id,
             "model_from_pretrained_kwargs": self.model_from_pretrained_kwargs,
+            "start_pos_offset": self.start_pos_offset,
+            "end_pos_offset": self.end_pos_offset,
         }
 
 
