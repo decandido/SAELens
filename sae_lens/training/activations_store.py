@@ -462,10 +462,14 @@ class ActivationsStore:
         n_batches, n_context = batch_tokens.shape
 
         # For some models, we might want to exclude some positions from the sequence to train on
-        context_window = list(range(self.start_pos_offset, n_context-self.end_pos_offset))
+        context_window = list(
+            range(self.start_pos_offset, n_context - self.end_pos_offset)
+        )
         effective_context_size = len(context_window)
 
-        stacked_activations = torch.zeros((n_batches, effective_context_size, 1, self.d_in))
+        stacked_activations = torch.zeros(
+            (n_batches, effective_context_size, 1, self.d_in)
+        )
 
         if self.hook_head_index is not None:
             stacked_activations[:, :, 0] = layerwise_activations[self.hook_name][
@@ -485,7 +489,9 @@ class ActivationsStore:
                     self.hook_name
                 ].reshape(n_batches, effective_context_size, -1)[:, context_window, :]
         else:
-            stacked_activations[:, :, 0] = layerwise_activations[self.hook_name][:, context_window, :]
+            stacked_activations[:, :, 0] = layerwise_activations[self.hook_name][
+                :, context_window, :
+            ]
 
         return stacked_activations
 
@@ -506,7 +512,9 @@ class ActivationsStore:
         total_size = batch_size * n_batches_in_buffer
         num_layers = 1
         # Calculate the effective context size
-        context_window = list(range(self.start_pos_offset, context_size-self.end_pos_offset))
+        context_window = list(
+            range(self.start_pos_offset, context_size - self.end_pos_offset)
+        )
         effective_context_size = len(context_window)
 
         if self.cached_activations_path is not None:
