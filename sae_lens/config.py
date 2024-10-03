@@ -637,6 +637,8 @@ class PretokenizeRunnerConfig:
     data_dir: str | None = None
     num_proc: int = 4
     context_size: int = 128
+    # Note, we did not add start_pos_offset or end_pos_offset to the PretokenizeRunnerConfig as the slicing occurs
+    # after passing the sequences through the model.
     column_name: str = "text"
     shuffle: bool = True
     seed: int | None = None
