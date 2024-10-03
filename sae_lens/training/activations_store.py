@@ -456,18 +456,19 @@ class ActivationsStore:
         n_batches, n_context = batch_tokens.shape
 
         # For some models, we might want to exclude some positions from the sequence to train on
-        context_window = list(
+        training_context_slice = list(
             range(self.start_pos_offset, n_context - self.end_pos_offset)
         )
-        effective_context_size = len(context_window)
+        # The size of the context window after slicing with position offsets
+        training_context_size = len(training_context_slice)
 
         stacked_activations = torch.zeros(
-            (n_batches, effective_context_size, 1, self.d_in)
+            (n_batches, training_context_size, 1, self.d_in)
         )
 
         if self.hook_head_index is not None:
             stacked_activations[:, :, 0] = layerwise_activations[self.hook_name][
-                :, context_window, self.hook_head_index
+                :, training_context_slice, self.hook_head_index
             ]
         elif (
             layerwise_activations[self.hook_name].ndim > 3
@@ -475,16 +476,16 @@ class ActivationsStore:
             try:
                 stacked_activations[:, :, 0] = layerwise_activations[
                     self.hook_name
-                ].view(n_batches, effective_context_size, -1)[:, context_window, :]
+                ].view(n_batches, training_context_size, -1)[:, training_context_slice, :]
             except RuntimeError as e:
                 print(f"Error during view operation: {e}")
                 print("Attempting to use reshape instead...")
                 stacked_activations[:, :, 0] = layerwise_activations[
                     self.hook_name
-                ].reshape(n_batches, effective_context_size, -1)[:, context_window, :]
+                ].reshape(n_batches, training_context_size, -1)[:, training_context_slice, :]
         else:
             stacked_activations[:, :, 0] = layerwise_activations[self.hook_name][
-                :, context_window, :
+                :, training_context_slice, :
             ]
 
         return stacked_activations
@@ -506,14 +507,14 @@ class ActivationsStore:
         total_size = batch_size * n_batches_in_buffer
         num_layers = 1
         # Calculate the effective context size
-        context_window = list(
+        training_context_slice = list(
             range(self.start_pos_offset, context_size - self.end_pos_offset)
         )
-        effective_context_size = len(context_window)
+        training_context_size = len(training_context_slice)
 
         if self.cached_activations_path is not None:
             # Load the activations from disk
-            buffer_size = total_size * effective_context_size
+            buffer_size = total_size * training_context_size
             # Initialize an empty tensor with an additional dimension for layers
             new_buffer = torch.zeros(
                 (buffer_size, num_layers, d_in),
@@ -567,7 +568,7 @@ class ActivationsStore:
         refill_iterator = range(0, batch_size * n_batches_in_buffer, batch_size)
         # Initialize empty tensor buffer of the maximum required size with an additional dimension for layers
         new_buffer = torch.zeros(
-            (total_size, effective_context_size, num_layers, d_in),
+            (total_size, training_context_size, num_layers, d_in),
             dtype=self.dtype,  # type: ignore
             device=self.device,
         )
