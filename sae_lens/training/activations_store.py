@@ -476,13 +476,17 @@ class ActivationsStore:
             try:
                 stacked_activations[:, :, 0] = layerwise_activations[
                     self.hook_name
-                ].view(n_batches, training_context_size, -1)[:, training_context_slice, :]
+                ].view(n_batches, training_context_size, -1)[
+                    :, training_context_slice, :
+                ]
             except RuntimeError as e:
                 print(f"Error during view operation: {e}")
                 print("Attempting to use reshape instead...")
                 stacked_activations[:, :, 0] = layerwise_activations[
                     self.hook_name
-                ].reshape(n_batches, training_context_size, -1)[:, training_context_slice, :]
+                ].reshape(n_batches, training_context_size, -1)[
+                    :, training_context_slice, :
+                ]
         else:
             stacked_activations[:, :, 0] = layerwise_activations[self.hook_name][
                 :, training_context_slice, :
